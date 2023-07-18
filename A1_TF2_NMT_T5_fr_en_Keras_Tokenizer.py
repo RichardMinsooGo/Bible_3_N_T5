@@ -374,7 +374,7 @@ C01. [Not Used] Sinusoid position encoding
 import math
 
 """
-C02. Scaled dot product attention
+C02. Relative Position Scaled dot product attention
 """
 class ScaledDotProductAttention(tf.keras.layers.Layer):
 
@@ -400,7 +400,7 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         tensor_shape_list = tensor_shape_tuple.as_list()    
         klen = int(tensor_shape_list[-2])
     
-        # 1. MatMul Q, K-transpose
+        # 1. MatMul Q, K-transpose. Attention score matrix.
         matmul_qk = tf.matmul(query, key, transpose_b=True)  # (..., seq_len_q, seq_len_k)
 
         # 2. scale matmul_qk
@@ -515,7 +515,7 @@ class MultiHeadAttentionLayer(tf.keras.layers.Layer):
         
         self.scaled_dot_attn = ScaledDotProductAttention()
         
-        # WO에 해당하는 밀집층 정의
+        # Dense layer definition corresponding to WO
         self.out = tf.keras.layers.Dense(hid_dim)
 
     def split_heads(self, inputs, batch_size):
@@ -738,8 +738,6 @@ class Decoder(tf.keras.layers.Layer):
         emb = self.embedding(dec_input)
         # emb *= tf.math.sqrt(tf.cast(self.hid_dim, tf.float32))
         
-        # 2. Sinusoidal positional Encoding
-
         output = self.dropout(emb, training=training)
 
         # 3. Padding mask is created from **encoder inputs** in this implementation
@@ -988,6 +986,7 @@ for epoch in range(N_EPOCHS):
 '''
 M12. Explore the training result with new raw sentence
 '''
+
 def evaluate(text):
     text = SRC_tokenizer.texts_to_sequences([text])
     text = pad_sequences(text, maxlen=ENCODER_LEN, padding='post', truncating='post')

@@ -368,15 +368,10 @@ M04. Build Transformer model
 """ 
 C01. [Not Used] Sinusoid position encoding
 """
-
-
-
-
-
 import math
 
 """
-C02. Scaled dot product attention
+C02. Relative Position Scaled dot product attention
 """
 class ScaledDotProductAttention(tf.keras.layers.Layer):
 
@@ -392,10 +387,12 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
     # def call(self, query, key, value, mask):
     def call(self, query, key, value, mask, bidirectional=True):
 
+        # 11. Query length is defined
         tensor_shape_tuple = query.get_shape()
         tensor_shape_list = tensor_shape_tuple.as_list()
         qlen = int(tensor_shape_list[-2])
         
+        # 12. Key length is defined
         tensor_shape_tuple = key.get_shape()
         tensor_shape_list = tensor_shape_tuple.as_list()    
         klen = int(tensor_shape_list[-2])
@@ -407,6 +404,7 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         dk = tf.cast(tf.shape(key)[-1], tf.float32)
         scaled_attention_logits = matmul_qk / tf.math.sqrt(dk)
         
+        # 6. Add position bias
         position_bias = self.compute_bias(qlen, klen, bidirectional=bidirectional)
         scaled_attention_logits += position_bias
 
@@ -414,29 +412,37 @@ class ScaledDotProductAttention(tf.keras.layers.Layer):
         if mask is not None:
             scaled_attention_logits += (mask * -1e9)
 
-        # 4. softmax is normalized on the last axis (seq_len_k) so that the scores add up to 1.
+        # 4. softmax is normalized on the last axis (seq_len_k) so that the scores
+        # add up to 1.
         attention_weights = tf.nn.softmax(scaled_attention_logits, axis=-1)  # (..., seq_len_q, seq_len_k)
 
+        # 5. MatMul attn_prov, V
         output = tf.matmul(attention_weights, value)  # (..., seq_len_q, depth_v)
 
         return output, attention_weights
     
     """Compute binned relative position bias"""
     def compute_bias(self, qlen, klen, bidirectional=True):
-
+        # 13. Context position from query length 
         context_position  = tf.range(qlen)[:, None]
+		
+        # 14. Memory position from key length 
         memory_position   = tf.range(klen)[None, :]
         
+        # 15. Relaive position is the difference of memory position and context position  
         relative_position = memory_position - context_position  # shape (qlen, klen)
         
+        # 16. Relaive position bucket generation 
         rp_bucket = self._relative_position_bucket(
             relative_position,
             bidirectional = bidirectional,
             num_buckets=self.num_buckets,
         )
 
+        # 17. Relaive attention bias update 
         values = self.relative_attention_bias(rp_bucket)  # shape (qlen, klen, num_heads)
         
+        # 18. Bias reshape to add at scaled dot-product attention 
         values = tf.expand_dims(tf.transpose(values, [2, 0, 1]), axis=0)  # shape (1, num_heads, qlen, klen)
         
         return values
@@ -729,7 +735,6 @@ class Decoder(tf.keras.layers.Layer):
         emb = self.embedding(dec_input)
         # emb *= tf.math.sqrt(tf.cast(self.hid_dim, tf.float32))
         
-
         output = self.dropout(emb, training=training)
 
         # 3. Padding mask is created from **encoder inputs** in this implementation
